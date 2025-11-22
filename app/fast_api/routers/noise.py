@@ -4,12 +4,14 @@ import os
 import tempfile
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from app.services.noise_analyzer import analyze_wall_material_api
+import logging
 
 router = APIRouter(prefix="/api", tags=["noise"])
-
+logger = logging.getLogger("uvicorn")
 
 @router.post("/noise")
 async def analyze_noise(body: UploadFile = File(...)):
+    logger.info(f"/api/noise hit, filename={body.filename}")
     """
     FormData로 음성파일(body)을 받아 벽체 재질 등급을 분석하는 API
 
@@ -61,5 +63,15 @@ async def analyze_noise(body: UploadFile = File(...)):
         "result": {
             "grade": result["grade"]
         },
+        "success": True,
+    }
+
+@router.post("/noise-test")
+async def noise_test():
+    logger.info("/api/noise-test hit")
+    return {
+        "code": "COMMON200",
+        "message": "테스트 성공입니다.",
+        "result": {"grade": "B"},
         "success": True,
     }
