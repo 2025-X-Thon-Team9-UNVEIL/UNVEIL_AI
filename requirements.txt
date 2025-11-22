@@ -3,7 +3,6 @@ uvicorn
 pymysql
 cryptography
 python-dotenv
-librosa
 scipy
 numpy
 python-multipart

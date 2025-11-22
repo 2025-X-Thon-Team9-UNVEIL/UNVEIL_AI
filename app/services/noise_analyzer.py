@@ -177,6 +177,15 @@ def analyze_wall_material_api(file_path: str) -> dict:
         grade_code, grade_letter, grade,
     )
 
+    # -----------------------------------------------
+    # -----------------------------------------------
+    logger.info("-" * 50)
+    logger.info(f"📢 분석 결과: {grade}")
+    logger.info(f"📊 Bass Ratio: {bass_ratio:.2f}")
+    logger.info(f"   - 저주파 RT60: {rt60_low:.2f}초")
+    logger.info(f"   - 고주파 RT60: {rt60_high:.2f}초")
+    logger.info(f"   - 전체 RT60: {rt60_full:.2f}초")
+
     return {
         "grade": grade_letter,          # API 스펙: A ~ C
         "grade_desc": grade,            # 내부적으로 쓰거나 디버깅용
