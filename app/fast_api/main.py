@@ -22,9 +22,5 @@ async def test_db():
         return rows
     finally:
         conn.close()
-
-if __name__ == "__main__":
-    port = int(os.getenv("PORT", 8000))
-    uvicorn.run("app.fast_api.main:app", host="0.0.0.0", port=port, reload=False)
-
+        
 # uvicorn app.fast_api.main:app --reload
