@@ -100,13 +100,6 @@ def _grade_code_to_letter(grade_code: str) -> str:
 
 
 def analyze_wall_material_api(file_path: str) -> dict:
-    logger.info("[NOISE] start analyze_wall_material_api, file=%s", file_path)
-
-    logger.info("[NOISE] importing librosa...")
-    import librosa
-    logger.info("[NOISE] imported librosa")
-
-    logger.info("[NOISE] loading audio...")
     """
     오디오 파일을 분석하여 벽체 재질 등급을 반환합니다.
 
@@ -116,83 +109,76 @@ def analyze_wall_material_api(file_path: str) -> dict:
     [반환값]
     - dict: grade, grade_code, bass_ratio, rt60 값들 포함
     """
+    logger.info("[NOISE] start analyze_wall_material_api, file=%s", file_path)
+
+    # 1) 오디오 로딩: soundfile만 사용
     try:
-        # 오디오 파일 로딩
-        y, sr = librosa.load(file_path, sr=None)
-        logger.info(f"[NOISE] loaded audio, sr={sr}, len={len(y)}")
+        logger.info("[NOISE] loading audio via soundfile...")
+        y, sr = sf.read(file_path, always_2d=False)
+
+        # 스테레오인 경우 → 모노로 평균
+        if y.ndim > 1:
+            logger.info("[NOISE] input audio has %d channels, converting to mono", y.shape[1])
+            y = y.mean(axis=1)
+
+        logger.info("[NOISE] loaded audio via soundfile, sr=%s, len=%s", sr, len(y))
     except Exception as e:
-        logger.error(f"[NOISE] failed to load audio via librosa: {e}")
+        logger.error("[NOISE] failed to load audio via soundfile: %s", e)
+        raise ValueError(f"오디오 파일을 로드할 수 없습니다: {str(e)}")
 
-        # fallback: soundfile 직접 사용
-        y, sr = sf.read(file_path)
-        logger.info("[NOISE] loaded audio via soundfile fallback")
-
-    # fallback: soundfile 직접 사용
-    y, sr = sf.read(file_path)
-    logger.info("[NOISE] loaded audio via soundfile fallback")
-
-    logger.info("[NOISE] computing stft...")
-    S = librosa.stft(y)
-    logger.info("[NOISE] stft computed")
-
-    logger.info("[NOISE] computing magnitude...")
-    S_db = librosa.amplitude_to_db(abs(S))
-    logger.info("[NOISE] magnitude computed")
-
-    # 주파수 대역 분해
+    # 2) 주파수 대역 분해
     logger.info("[NOISE] filtering low-band...")
     y_low = butter_bandpass_filter(y, 125, 500, sr, order=5)
-    logger.info("[NOISE] filtering high-band…")
+    logger.info("[NOISE] filtering high-band...")
     y_high = butter_bandpass_filter(y, 1000, 4000, sr, order=5)
 
-    # 대역별 RT60 계산
-    logger.info("[NOISE] computing RT60 for full…")
+    # 3) RT60 계산
+    logger.info("[NOISE] computing RT60 values...")
     rt60_full, _ = get_decay_curve_and_rt60(y, sr)
-    logger.info("[NOISE] computing RT60 low…")
     rt60_low, _ = get_decay_curve_and_rt60(y_low, sr)
-    logger.info("[NOISE] computing RT60 high…")
     rt60_high, _ = get_decay_curve_and_rt60(y_high, sr)
 
-    # Bass Ratio 계산
+    # 4) Bass Ratio 계산
     bass_ratio = rt60_low / (rt60_high + 1e-5)
-    logger.info(f"[NOISE] bass_ratio={bass_ratio:.4f}")
 
-    # 디버깅 출력 추가
-    print("[DEBUG] rt60_full:", rt60_full)
-    print("[DEBUG] rt60_low:", rt60_low)
-    print("[DEBUG] rt60_high:", rt60_high)
-    print("[DEBUG] bass_ratio:", bass_ratio)
+    logger.info(
+        "[NOISE] RT60 full=%.3f, low=%.3f, high=%.3f, bass_ratio=%.3f",
+        rt60_full, rt60_low, rt60_high, bass_ratio,
+    )
 
-    logger.info("[NOISE] determining grade...")
-    # 벽체 재질 판별
+    # 5) 벽체 재질 판별
     grade = "판단 보류"
     grade_code = "UNKNOWN"
 
+    # (A) 전체 RT60이 매우 짧으면 -> 흡음 환경
     if rt60_full < 0.3:
         grade = "흡음 환경 (Safe)"
         grade_code = "SAFE"
 
+    # (B) Bass ratio가 0.1 ~ 0.3이면 -> 일반 콘크리트/조적벽
     elif 0.1 <= bass_ratio <= 0.3:
         grade = "콘크리트/조적벽 (Normal)"
         grade_code = "NORMAL"
 
+    # (C) Bass ratio가 0.3 이상이면 -> 가벽/중공벽 의심
     elif bass_ratio > 0.3:
         grade = "가벽/중공벽 의심 (Warning)"
         grade_code = "WARNING"
 
+    # (D) 그 외 -> 반사성 표면
     else:
         grade = "반사성 표면 (Glass/Tile)"
         grade_code = "REFLECTIVE"
 
     grade_letter = _grade_code_to_letter(grade_code)
-    logger.info(f"[NOISE] grade_code={grade_code}, grade_letter={grade_letter}")
 
-    logger.info("[NOISE] analysis done.")
-    print("[DEBUG] grade_code:", grade_code)
-    print("[DEBUG] grade_letter:", grade_letter)
+    logger.info(
+        "[NOISE] grade_code=%s, grade_letter=%s, desc=%s",
+        grade_code, grade_letter, grade,
+    )
 
     return {
-        "grade": grade_letter,          # API 스펙: A ~ D
+        "grade": grade_letter,          # API 스펙: A ~ C
         "grade_desc": grade,            # 내부적으로 쓰거나 디버깅용
         "grade_code": grade_code,
         "bass_ratio": round(bass_ratio, 2),
