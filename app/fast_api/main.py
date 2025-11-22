@@ -1,10 +1,13 @@
 # app/fast_api/main.py
 from fastapi import FastAPI
-import uvicorn
-import os
 from app.core.database import get_mysql_connection
+from app.fast_api.routers.noise import router as noise_router
 
 app = FastAPI()
+
+
+# 라우터 등록
+app.include_router(noise_router)
 
 @app.get("/")
 async def root():
@@ -22,5 +25,5 @@ async def test_db():
         return rows
     finally:
         conn.close()
-        
+
 # uvicorn app.fast_api.main:app --reload
