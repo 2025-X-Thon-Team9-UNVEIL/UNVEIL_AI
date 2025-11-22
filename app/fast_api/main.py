@@ -26,4 +26,4 @@ async def test_db():
     finally:
         conn.close()
 
-# uvicorn app.fast_api.main:app --reload
+# python -m uvicorn app.fast_api.main:app

@@ -70,21 +70,20 @@ def get_decay_curve_and_rt60(y, sr):
 
 def _grade_code_to_letter(grade_code: str) -> str:
     """
-    내부 grade_code -> 외부 노출용 A~D 등급 매핑
     SAFE       -> A
     NORMAL     -> B
     WARNING    -> C
-    REFLECTIVE -> D
-    UNKNOWN    -> D (일단 최저 등급 처리)
+    REFLECTIVE -> C
+    UNKNOWN    -> C
     """
     mapping = {
         "SAFE": "A",
         "NORMAL": "B",
         "WARNING": "C",
-        "REFLECTIVE": "D",
-        "UNKNOWN": "D",
+        "REFLECTIVE": "C",
+        "UNKNOWN": "C",
     }
-    return mapping.get(grade_code, "D")
+    return mapping.get(grade_code, "C")
 
 
 def analyze_wall_material_api(file_path: str) -> dict:
@@ -115,6 +114,12 @@ def analyze_wall_material_api(file_path: str) -> dict:
     # Bass Ratio 계산
     bass_ratio = rt60_low / (rt60_high + 1e-5)
 
+    # 디버깅 출력 추가
+    print("[DEBUG] rt60_full:", rt60_full)
+    print("[DEBUG] rt60_low:", rt60_low)
+    print("[DEBUG] rt60_high:", rt60_high)
+    print("[DEBUG] bass_ratio:", bass_ratio)
+
     # 벽체 재질 판별
     grade = "판단 보류"
     grade_code = "UNKNOWN"
@@ -122,17 +127,22 @@ def analyze_wall_material_api(file_path: str) -> dict:
     if rt60_full < 0.3:
         grade = "흡음 환경 (Safe)"
         grade_code = "SAFE"
-    elif bass_ratio > 1.25:
-        grade = "가벽/중공벽 의심 (Warning)"
-        grade_code = "WARNING"
-    elif 0.8 <= bass_ratio <= 1.25:
+
+    elif 0.1 <= bass_ratio <= 0.3:
         grade = "콘크리트/조적벽 (Normal)"
         grade_code = "NORMAL"
+
+    elif bass_ratio > 0.3:
+        grade = "가벽/중공벽 의심 (Warning)"
+        grade_code = "WARNING"
+
     else:
         grade = "반사성 표면 (Glass/Tile)"
         grade_code = "REFLECTIVE"
 
     grade_letter = _grade_code_to_letter(grade_code)
+    print("[DEBUG] grade_code:", grade_code)
+    print("[DEBUG] grade_letter:", grade_letter)
 
     return {
         "grade": grade_letter,          # API 스펙: A ~ D
