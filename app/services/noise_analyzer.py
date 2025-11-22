@@ -8,6 +8,7 @@ test.ipynb의 분석 로직을 API용으로 변환
 import numpy as np
 from scipy import stats, signal
 import logging
+import soundfile as sf
 logger = logging.getLogger("uvicorn")
 
 
@@ -26,10 +27,11 @@ def butter_bandpass_filter(data, lowcut, highcut, fs, order=5):
 
 
 def get_decay_curve_and_rt60(y, sr):
-    logger.info("[NOISE] RT60 calculation start")
     """
     슈뢰더 역방향 적분을 통해 에너지 감쇠 곡선을 추출하고, RT60을 계산합니다.
     """
+    logger.info("[NOISE] RT60 calculation start (len=%d, sr=%d)", len(y), sr)
+
     # 피크 지점 찾기
     peak_index = np.argmax(np.abs(y))
     y = y[peak_index:]
@@ -48,16 +50,19 @@ def get_decay_curve_and_rt60(y, sr):
     idx_start = np.where(s_db <= -5)[0]
     idx_end = np.where(s_db <= -25)[0]
 
+    # 기본값 미리 설정해 두고, 실패 케이스에서는 이 값으로 리턴
+    default_rt60 = 0.1
+
     if len(idx_start) == 0 or len(idx_end) == 0:
-        logger.info("[NOISE] RT60 calc fallback -> return 0.1")
-        return 0.1, s_db
+        logger.warning("[NOISE] RT60 구간 탐색 실패 (idx_start/idx_end 없음), rt60=%.3f 사용", default_rt60)
+        return default_rt60, s_db
 
     idx_start = idx_start[0]
     idx_end = idx_end[0]
 
     if idx_start >= idx_end:
-        logger.info("[NOISE] RT60 invalid range -> return 0.1")
-        return 0.1, s_db
+        logger.warning("[NOISE] RT60 구간이 잘못됨 (idx_start >= idx_end), rt60=%.3f 사용", default_rt60)
+        return default_rt60, s_db
 
     # 선형 회귀 분석
     x = np.arange(idx_start, idx_end)
@@ -69,10 +74,11 @@ def get_decay_curve_and_rt60(y, sr):
         slope = -0.001
 
     # RT60 계산
-    logger.info(f"[NOISE] RT60 calculation end -> {rt60:.4f}")
     rt60 = -60 / slope / sr
+    rt60 = abs(rt60)
 
-    return abs(rt60), y_slice
+    logger.info("[NOISE] RT60 calculation end -> %.4f", rt60)
+    return rt60, y_slice
 
 
 def _grade_code_to_letter(grade_code: str) -> str:
@@ -115,7 +121,15 @@ def analyze_wall_material_api(file_path: str) -> dict:
         y, sr = librosa.load(file_path, sr=None)
         logger.info(f"[NOISE] loaded audio, sr={sr}, len={len(y)}")
     except Exception as e:
-        raise ValueError(f"오디오 파일을 로드할 수 없습니다: {str(e)}")
+        logger.error(f"[NOISE] failed to load audio via librosa: {e}")
+
+        # fallback: soundfile 직접 사용
+        y, sr = sf.read(file_path)
+        logger.info("[NOISE] loaded audio via soundfile fallback")
+
+    # fallback: soundfile 직접 사용
+    y, sr = sf.read(file_path)
+    logger.info("[NOISE] loaded audio via soundfile fallback")
 
     logger.info("[NOISE] computing stft...")
     S = librosa.stft(y)
