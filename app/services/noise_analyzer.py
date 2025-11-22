@@ -128,7 +128,7 @@ def analyze_wall_material_api(file_path: str) -> dict:
 
     # 2) 주파수 대역 분해
     logger.info("[NOISE] filtering low-band...")
-    y_low = butter_bandpass_filter(y, 125, 500, sr, order=5)
+    y_low = butter_bandpass_filter(y, 125, 500, sr, order=3)
     logger.info("[NOISE] filtering high-band...")
     y_high = butter_bandpass_filter(y, 1000, 4000, sr, order=5)
 
