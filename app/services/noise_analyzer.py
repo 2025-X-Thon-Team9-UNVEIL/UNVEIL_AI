@@ -15,15 +15,18 @@ def butter_bandpass_filter(data, lowcut, highcut, fs, order=5):
     """
     Butterworth Band-pass Filter를 사용하여 특정 주파수 대역만 추출합니다.
     """
+    logger.info(f"[NOISE] bandpass filter start: {lowcut}~{highcut}Hz")
     nyq = 0.5 * fs
     low = lowcut / nyq
     high = highcut / nyq
     b, a = signal.butter(order, [low, high], btype="band")
     y = signal.filtfilt(b, a, data)
+    logger.info(f"[NOISE] bandpass filter end: {lowcut}~{highcut}Hz")
     return y
 
 
 def get_decay_curve_and_rt60(y, sr):
+    logger.info("[NOISE] RT60 calculation start")
     """
     슈뢰더 역방향 적분을 통해 에너지 감쇠 곡선을 추출하고, RT60을 계산합니다.
     """
@@ -46,12 +49,14 @@ def get_decay_curve_and_rt60(y, sr):
     idx_end = np.where(s_db <= -25)[0]
 
     if len(idx_start) == 0 or len(idx_end) == 0:
+        logger.info("[NOISE] RT60 calc fallback -> return 0.1")
         return 0.1, s_db
 
     idx_start = idx_start[0]
     idx_end = idx_end[0]
 
     if idx_start >= idx_end:
+        logger.info("[NOISE] RT60 invalid range -> return 0.1")
         return 0.1, s_db
 
     # 선형 회귀 분석
@@ -64,6 +69,7 @@ def get_decay_curve_and_rt60(y, sr):
         slope = -0.001
 
     # RT60 계산
+    logger.info(f"[NOISE] RT60 calculation end -> {rt60:.4f}")
     rt60 = -60 / slope / sr
 
     return abs(rt60), y_slice
@@ -88,11 +94,13 @@ def _grade_code_to_letter(grade_code: str) -> str:
 
 
 def analyze_wall_material_api(file_path: str) -> dict:
-    logger.info(f"[NOISE] start analyze_wall_material_api, file={file_path}")
+    logger.info("[NOISE] start analyze_wall_material_api, file=%s", file_path)
 
+    logger.info("[NOISE] importing librosa...")
     import librosa
     logger.info("[NOISE] imported librosa")
 
+    logger.info("[NOISE] loading audio...")
     """
     오디오 파일을 분석하여 벽체 재질 등급을 반환합니다.
 
@@ -109,17 +117,31 @@ def analyze_wall_material_api(file_path: str) -> dict:
     except Exception as e:
         raise ValueError(f"오디오 파일을 로드할 수 없습니다: {str(e)}")
 
+    logger.info("[NOISE] computing stft...")
+    S = librosa.stft(y)
+    logger.info("[NOISE] stft computed")
+
+    logger.info("[NOISE] computing magnitude...")
+    S_db = librosa.amplitude_to_db(abs(S))
+    logger.info("[NOISE] magnitude computed")
+
     # 주파수 대역 분해
+    logger.info("[NOISE] filtering low-band...")
     y_low = butter_bandpass_filter(y, 125, 500, sr, order=5)
+    logger.info("[NOISE] filtering high-band…")
     y_high = butter_bandpass_filter(y, 1000, 4000, sr, order=5)
 
     # 대역별 RT60 계산
+    logger.info("[NOISE] computing RT60 for full…")
     rt60_full, _ = get_decay_curve_and_rt60(y, sr)
+    logger.info("[NOISE] computing RT60 low…")
     rt60_low, _ = get_decay_curve_and_rt60(y_low, sr)
+    logger.info("[NOISE] computing RT60 high…")
     rt60_high, _ = get_decay_curve_and_rt60(y_high, sr)
 
     # Bass Ratio 계산
     bass_ratio = rt60_low / (rt60_high + 1e-5)
+    logger.info(f"[NOISE] bass_ratio={bass_ratio:.4f}")
 
     # 디버깅 출력 추가
     print("[DEBUG] rt60_full:", rt60_full)
@@ -127,6 +149,7 @@ def analyze_wall_material_api(file_path: str) -> dict:
     print("[DEBUG] rt60_high:", rt60_high)
     print("[DEBUG] bass_ratio:", bass_ratio)
 
+    logger.info("[NOISE] determining grade...")
     # 벽체 재질 판별
     grade = "판단 보류"
     grade_code = "UNKNOWN"
@@ -148,6 +171,9 @@ def analyze_wall_material_api(file_path: str) -> dict:
         grade_code = "REFLECTIVE"
 
     grade_letter = _grade_code_to_letter(grade_code)
+    logger.info(f"[NOISE] grade_code={grade_code}, grade_letter={grade_letter}")
+
+    logger.info("[NOISE] analysis done.")
     print("[DEBUG] grade_code:", grade_code)
     print("[DEBUG] grade_letter:", grade_letter)
 
