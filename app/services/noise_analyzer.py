@@ -6,8 +6,9 @@ test.ipynb의 분석 로직을 API용으로 변환
 """
 
 import numpy as np
-import librosa
 from scipy import stats, signal
+import logging
+logger = logging.getLogger("uvicorn")
 
 
 def butter_bandpass_filter(data, lowcut, highcut, fs, order=5):
@@ -87,6 +88,11 @@ def _grade_code_to_letter(grade_code: str) -> str:
 
 
 def analyze_wall_material_api(file_path: str) -> dict:
+    logger.info(f"[NOISE] start analyze_wall_material_api, file={file_path}")
+
+    import librosa
+    logger.info("[NOISE] imported librosa")
+
     """
     오디오 파일을 분석하여 벽체 재질 등급을 반환합니다.
 
@@ -99,6 +105,7 @@ def analyze_wall_material_api(file_path: str) -> dict:
     try:
         # 오디오 파일 로딩
         y, sr = librosa.load(file_path, sr=None)
+        logger.info(f"[NOISE] loaded audio, sr={sr}, len={len(y)}")
     except Exception as e:
         raise ValueError(f"오디오 파일을 로드할 수 없습니다: {str(e)}")
 
