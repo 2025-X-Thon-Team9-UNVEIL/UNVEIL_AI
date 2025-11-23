@@ -139,7 +139,7 @@ def analyze_wall_material_api(file_path: str) -> dict:
     rt60_high, _ = get_decay_curve_and_rt60(y_high, sr)
 
     # 4) Bass Ratio 계산
-    bass_ratio = rt60_low / (rt60_high + 1e-5)
+    bass_ratio = rt60_low / (rt60_high)
 
     logger.info(
         "[NOISE] RT60 full=%.3f, low=%.3f, high=%.3f, bass_ratio=%.3f",
@@ -156,13 +156,13 @@ def analyze_wall_material_api(file_path: str) -> dict:
         grade_code = "SAFE"
 
     # (B) Bass ratio가 0.1 ~ 0.3이면 -> 일반 콘크리트/조적벽
-    elif 0.1 <= bass_ratio <= 0.3:
+    elif 0.7 <= bass_ratio <= 1.3:
         grade = "콘크리트/조적벽 (Normal)"
         grade_code = "NORMAL"
 
     # (C) Bass ratio가 0.3 이상이면 -> 가벽/중공벽 의심
-    elif bass_ratio > 0.3:
-        grade = "가벽/중공벽 의심 (Warning)"
+    elif bass_ratio > 1.3:
+        grade = "방음 성능이 다소 낮은 벽체"
         grade_code = "WARNING"
 
     # (D) 그 외 -> 반사성 표면
